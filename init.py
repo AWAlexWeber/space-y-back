@@ -31,11 +31,11 @@ def init_route():
 from main.engine import Engine
 from main.engine import EngineRunner
 e = Engine(app)
-runner = EngineRunner(e)
+runner = EngineRunner(e, 1)
 
 # Mutlithread start
-x = threading.Thread(target=runner.run, args=())
-x.start()
+#x = threading.Thread(target=runner.run, args=())
+#x.start()
 
 app.run(host='0.0.0.0')
 

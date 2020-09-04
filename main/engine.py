@@ -10,6 +10,8 @@ from .reactor import ReactorModule
 from .thrusters import ThrusterModule
 from .eventqueue import EventSystem, Event
 
+from .module import *
+
 # Importing base
 from auth.error import *
 import requests
@@ -45,17 +47,28 @@ class Engine:
         # Starting our event system
         self.eventSystem = EventSystem()
 
-        # Loading them in
-        self.modules.append(CommandModule(self))
-        self.modules.append(CoolantModule(self))
-        self.modules.append(OxyScrubModule(self))
-        self.modules.append(ReactorModule(self))
-        self.modules.append(ThrusterModule(self))
-        self.modules.append(AdminModule(self))
+        # Starting our resource pool
+        resourcePool = ShipResourceContainer(self)
+        self.resourcePool = resourcePool
 
-        credentials = CredentialsApp(self)
+        # Loading them in
+        self.modules.append(CommandModule(self, resourcePool))
+        self.modules.append(CoolantModule(self, resourcePool))
+        self.modules.append(OxyScrubModule(self, resourcePool))
+        self.modules.append(ReactorModule(self, resourcePool))
+        self.modules.append(ThrusterModule(self, resourcePool))
+        self.modules.append(AdminModule(self, resourcePool))
+
+        credentials = CredentialsApp(self, resourcePool)
         credentials.online()
+
         self.modules.append(credentials)
+
+        # Initializing the modules resource requests pools
+        # Basically we allow them to initialzie their own access pools
+        for module in self.modules:
+            # Starting their resource pools
+            module.createResourcePools()
 
         # Loading in our modules
         self.loadApp(self.app)
@@ -79,12 +92,35 @@ class Engine:
 
         @app.route('/engine/statusAdvanced', methods=['GET'])
         def get_status_advanced():
+            start = time.time()
             # Getting all status information for the engine
             output = {}
             output['time'] = self.getTime()
             output['reboot'] = self.getRebootInfo()
             output['status'] = self.getSystemsStatus()
             output['logs'] = self.get_system_logs()
+            output['resource'] = self.getResourceLevels()
+            end = time.time()
+            print(f"Runtime of the program is {end - start}")
+
+            return throw_json_success("Advanced System Status", output)
+            
+        @app.route('/engine/statusAdvancedAll', methods=['GET'])
+        def get_status_everything():
+
+            # Getting all status information for the engine
+            output = {}
+            output['time'] = self.getTime()
+            output['reboot'] = self.getRebootInfo()
+            output['status'] = self.getSystemsStatus()
+            output['logs'] = self.get_system_logs()
+            output['resource'] = self.getResourceLevels()
+            module_output = {}
+
+            # Getting all of the current modules
+            for module_name in self.modulesTable:
+                module_output[module_name] = self.modulesTable[module_name].getAdvancedStatus()
+            output['modules'] = module_output
 
             return throw_json_success("Advanced System Status", output)
 
@@ -199,18 +235,37 @@ class Engine:
             output[key] = module.get_logs()
         return output
 
+    def getResourceLevels(self):
+        data = self.resourcePool.getFullOutput()
+        return data
+
 class EngineRunner:
 
-    def __init__(self, engine):
+    def __init__(self, engine, processSpeed):
         self.engine = engine
+        self.processSpeed = processSpeed
 
     def run(self):
         while True:
             # Processing events
             self.processAllEvents()
 
+            # Processing resources
+            #self.processResourceRequests()
+
             # Running
-            time.sleep(1)
+            print("Sleeping for " + str(self.processSpeed))
+            time.sleep(self.processSpeed)
+
+    def processResourceRequests(self):
+        for module_name in self.engine.modulesTable:
+            module = self.engine.modulesTable[module_name]
+            module.processResourceAddToPool()
+
+        for module_name in self.engine.modulesTable:
+            module = self.engine.modulesTable[module_name]
+            module.processResourceRemoveFromPool()
+        
 
     def processAllEvents(self):
         # Attempting to process time-based events
@@ -228,9 +283,9 @@ class EngineRunner:
 # Credentials application that does credential stuff
 class CredentialsApp(Module):
 
-    def __init__(self, engine):
+    def __init__(self, engine, resourcePool):
         # Onlining credential servers
-        super().__init__("cred", engine) 
+        super().__init__("cred", engine, resourcePool) 
 
         # Table of the username and password
         self.credTable = {}
@@ -344,8 +399,8 @@ class CredentialsApp(Module):
 # Wrapper administration portal class
 class AdminModule(Module):
 
-    def __init__(self, engine):
-        super().__init__("admin", engine) 
+    def __init__(self, engine, resourcePool):
+        super().__init__("admin", engine, resourcePool) 
 
     def loadApp(self, app):
         print("Not yet implemented")

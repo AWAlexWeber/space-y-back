@@ -1,20 +1,37 @@
 # Imports
 from .log import Log
 from auth.error import *
+from .shipresourcecontainer import *
 
 # Base module
 class Module:
 
-    def __init__(self, moduleName, engine):
+    def __init__(self, moduleName, engine, resourceContainer):
         self.moduleName = moduleName
         self.engine = engine
         self.status = "Offline"
         self.rebootTime = 6
         self.rebootStatus = False
+        self.resourceContainer = resourceContainer
+
+        # Dictionary by the sub modules FULL NAME (submodule_name-submodule_id ie reactor-1)
+        self.subModules = {}
 
         # Starting the log
         self.log = Log(self.moduleName)
         self.log.appendLog("Initializing...")
+
+    def getAdvancedStatus(self):
+        return {}
+
+    def addSubModule(self, subModule, name):
+        self.subModules[name] = subModule
+
+    def getSubModule(self, name):
+        if name in self.subModules:
+            return self.subModules[name]
+        else:
+            return None
 
     def online(self):
 
@@ -39,14 +56,56 @@ class Module:
         # Returning all of the logs in list format
         return self.log.get_logs()
 
+    # Creating our resource pools
+    def createResourcePools(self):
+        # Set the resource pools to zero
+        return None
+
+    # Processing resource requests
+    def processResourceAddToPool(self):
+        # This will give out all the resources
+        return None
+
+    def processResourceRemoveFromPool(self):
+        # This will take out resources
+        return None
+
 # Submodule
 class SubModule:
 
     def __init__(self, subModuleName, subModuleId, parentModule, engine):
         self.name, self.id, self.parent, self.engine = subModuleName, subModuleId, parentModule, engine
+        self.status = "Offline"
 
     def online(self):
-        this.status = "Online"
+        self.status = "Online"
 
     def offline(self):
-        this.status = "Offline"
+        self.status = "Offline"
+
+    def isOnline(self):
+        return (True if self.status == "Online" else False)
+
+    def logParent(self, message, type=0):
+        self.parent.log.appendLog(str(self.name) + " (" + str(self.id) + ") - " + message, type)
+
+    def attemptOnline(self):
+        self.online()
+
+        # Adding this to our module logs
+        self.logParent("Online")
+        return True
+
+    def attemptOffline(self):
+        self.offline()
+
+        # Adding this to our module logs
+        self.logParent("Offline")
+        return True
+
+    def getAdvancedStatus(self):
+        output = {}
+        output["name"] = self.name
+        output["id"] = self.id
+        output["status"] = self.status
+        return output
