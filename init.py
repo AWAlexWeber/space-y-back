@@ -29,10 +29,12 @@ def init_route():
 
 ### Initializing our engine
 from main.engine import Engine
-from main.engine import EngineRunner
-e = Engine(app)
-runner = EngineRunner(e, 1)
 
+
+e = Engine(app)
+
+#from main.engine import EngineRunner
+#runner = EngineRunner(e, 1)
 # Mutlithread start
 #x = threading.Thread(target=runner.run, args=())
 #x.start()
