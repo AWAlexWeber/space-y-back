@@ -13,10 +13,39 @@ class ShipResourceContainer:
         # Creating our resource lock
         self.mutex = Lock()
 
+        # Ban list to prevent modules from taking a specific resource
+        self.banList = {}
+
+    def addToBanList(self, banModuleName, banResourceName):
+        # If its not in the ban list, create a new one
+        if banModuleName not in self.banList:
+            self.banList[banModuleName] = {}
+            self.banList[banModuleName][banResourceName] = True
+        else:
+            self.banList[banModuleName][banResourceName] = True
+
+    def removeFromBanList(self, banModuleName, banResourceName):
+        # Is this in our list?
+        if banModuleName not in self.banList:
+            return
+
+        else:
+            self.banList[banModuleName][banResourceName] = False
+
+    def isInBanList(self, banModuleName, banResourceName):
+        if banModuleName not in self.banList:
+            return False
+
+        elif banResourceName not in self.banList[banModuleName]:
+            return False
+
+        return self.banList[banModuleName][banResourceName]
+
     def getFullOutput(self):
         data = {}
         data['resourceLevels'] = self.getAllResourceLevels()
         data['resourceCaps'] = self.getAllResourceCaps()
+        data['resourceBans'] = self.banList
         return data
 
     def getAllResourceLevels(self):
@@ -42,7 +71,7 @@ class ShipResourceContainer:
         self.resourcePool[resourceName] = 0
 
     def addResource(self, resourceName, resourceAmount):
-        #self.mutex.acquire()
+        self.mutex.acquire()
         try:
             if resourceName in self.resourcePool:
                 finalAmount = resourceAmount + self.resourcePool[resourceName]
@@ -53,13 +82,24 @@ class ShipResourceContainer:
                 self.resourcePool[resourceName] = finalAmount
 
         finally:
-             #self.mutex.release()
+             self.mutex.release()
 
              return
 
+    # Directly setting the resource level
+    # Use this cautiously
+    def setResourceLevel(self, resourceName, resourceAmount):
+        self.resourcePool[resourceName] = resourceAmount
 
-    def removeResource(self, resourceName, resourceAmount):
-        #self.mutex.acquire()
+
+    # Note that the request module allows us to 'ban' modules from getting resources
+    # By default it is none, for if we want to avoid any bans
+    def removeResource(self, resourceName, resourceAmount, requestModule=None):
+        # Is this in our ban list?
+        if self.isInBanList(requestModule, resourceName):
+            return 0
+
+        self.mutex.acquire()
         amountTaken = 0
         try:
             # Getting the data
@@ -74,7 +114,7 @@ class ShipResourceContainer:
                     amountTaken = resourceAmount
                     self.resourcePool[resourceName] = self.resourcePool[resourceName] - resourceAmount
         finally:
-            #self.mutex.release()
+            self.mutex.release()
 
             # Returning our resources
             return amountTaken

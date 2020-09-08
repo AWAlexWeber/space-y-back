@@ -12,7 +12,8 @@ class Module:
         self.status = "Offline"
         self.rebootTime = 6
         self.rebootStatus = False
-        self.resourceContainer = resourceContainer
+        self.globalResourceContainer = resourceContainer
+        self.internalResourceContainer = ShipResourceContainer(self.engine)
 
         # Dictionary by the sub modules FULL NAME (submodule_name-submodule_id ie reactor-1)
         self.subModules = {}
@@ -38,6 +39,13 @@ class Module:
         # Onlining the module
         self.status = "Online"
         self.log.appendLog("Online", -1)
+
+    def destroy(self):
+        self.status = "Destroyed"
+
+    def attemptDestroy(self):
+        self.logParent("Destroyed!", 2)
+        self.destroy()
 
     def attemptOnline(self):
 
@@ -68,6 +76,10 @@ class Module:
 
     def processResourceRemoveFromPool(self):
         # This will take out resources
+        return None
+
+    # Extra processing
+    def processExtra(self):
         return None
 
 # Submodule
@@ -102,6 +114,13 @@ class SubModule:
         # Adding this to our module logs
         self.logParent("Offline")
         return True
+
+    def destroy(self):
+        self.status = "Destroyed"
+
+    def attemptDestroy(self):
+        self.logParent("Destroyed!", 2)
+        self.destroy()
 
     def getAdvancedStatus(self):
         output = {}

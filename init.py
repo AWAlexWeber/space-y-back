@@ -33,11 +33,11 @@ from main.engine import Engine
 
 e = Engine(app)
 
-#from main.engine import EngineRunner
-#runner = EngineRunner(e, 1)
+from main.engine import EngineRunner
+runner = EngineRunner(e, 1)
 # Mutlithread start
-#x = threading.Thread(target=runner.run, args=())
-#x.start()
+x = threading.Thread(target=runner.run, args=())
+x.start()
 
 app.run(host='0.0.0.0')
 

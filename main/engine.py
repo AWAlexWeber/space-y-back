@@ -37,6 +37,11 @@ class Engine:
         # Starting the onlining process
         self.status = "Onlining"
 
+        # Meeting data
+        self.meetingMode = False
+        self.meetingStartTime = None
+        self.totalMeetingAdjustTimeMS = 0
+
         # Enabling the clock module
         self.startTime = datetime.datetime.now() 
 
@@ -51,18 +56,23 @@ class Engine:
         resourcePool = ShipResourceContainer(self)
         self.resourcePool = resourcePool
 
+        # Onling bare-bones stuff
+        admin = AdminModule(self, resourcePool)
+        admin.online()
+
+        self.modules.append(admin)
+
+        credentials = CredentialsApp(self, resourcePool)
+        credentials.online()
+
+        self.modules.append(credentials)
+
         # Loading them in
         self.modules.append(CommandModule(self, resourcePool))
         self.modules.append(CoolantModule(self, resourcePool))
         self.modules.append(OxyScrubModule(self, resourcePool))
         self.modules.append(ReactorModule(self, resourcePool))
         self.modules.append(ThrusterModule(self, resourcePool))
-        self.modules.append(AdminModule(self, resourcePool))
-
-        credentials = CredentialsApp(self, resourcePool)
-        credentials.online()
-
-        self.modules.append(credentials)
 
         # Initializing the modules resource requests pools
         # Basically we allow them to initialzie their own access pools
@@ -81,6 +91,34 @@ class Engine:
 
     # Loading the application
     def loadApp(self, app):
+
+        # Handling meetings
+        @app.route('/engine/meeting/start', methods=['GET'])
+        def start_meeting():
+            if (self.meetingMode):
+                response = throw_json_success("Already in meeting", False)
+                return response
+
+            self.meetingMode = True
+            self.meetingStartTime = datetime.datetime.now()
+
+            response = throw_json_success("Meeting started", True)
+            return response
+
+        @app.route('/engine/meeting/end', methods=['GET'])
+        def end_meeting():
+            if (not self.meetingMode):
+                response = throw_json_success("No active meeting to adjourn", False)
+                return response
+
+
+            self.meetingMode = False
+            self.totalMeetingAdjustTimeMS = self.totalMeetingAdjustTimeMS + (datetime.datetime.now() - self.meetingStartTime).microseconds // 100
+            self.meetingStartTime = None
+
+            response = throw_json_success("Meeting adjourned", True)
+            return response
+
         # Initializing our engine routes
         @app.route('/engine/status', methods=['GET'])
         def get_engine_status():
@@ -100,6 +138,7 @@ class Engine:
             output['status'] = self.getSystemsStatus()
             output['logs'] = self.get_system_logs()
             output['resource'] = self.getResourceLevels()
+            output['meeting'] = self.getMeetingData()
             end = time.time()
             print(f"Runtime of the program is {end - start}")
 
@@ -115,6 +154,7 @@ class Engine:
             output['status'] = self.getSystemsStatus()
             output['logs'] = self.get_system_logs()
             output['resource'] = self.getResourceLevels()
+            output['meeting'] = self.getMeetingData()
             module_output = {}
 
             # Getting all of the current modules
@@ -126,7 +166,7 @@ class Engine:
 
         @app.route('/engine/rebootInfo', methods=['GET'])
         def get_reboot_info():
-            data = self.getRebootInfo(self)
+            data = self.getRebootInfo()
 
             response = throw_json_success("Reboot information", data)
             return response
@@ -189,6 +229,30 @@ class Engine:
             output = self.getTime()
             return throw_json_success("Current Time", output)
 
+        @app.route('/engine/resource/ban', methods=['POST'])
+        def ban_resource_from_pool():
+            json_input = request.data
+            json_data = json.loads(json_input.decode('utf-8'))
+
+            resource = json_data['resource']
+            module = json_data['module']
+
+            self.resourcePool.addToBanList(module, resource)
+
+            return throw_json_success("Banned module", True)
+
+        @app.route('/engine/resource/unban', methods=['POST'])
+        def unban_resource_from_pool():
+            json_input = request.data
+            json_data = json.loads(json_input.decode('utf-8'))
+
+            resource = json_data['resource']
+            module = json_data['module']
+
+            self.resourcePool.removeFromBanList(module, resource)
+
+            return throw_json_success("Banned module", True)
+
     # Getting the system information
     def getSystemsStatus(self):
         data = {}
@@ -202,6 +266,7 @@ class Engine:
 
     # Supporting engine functions
     def getTime(self):
+        """
         time = datetime.datetime.now()
         minustime = time - self.startTime
         hours, minutes, seconds, micro = minustime.seconds // 3600, minustime.seconds // 60, minustime.seconds, minustime.microseconds
@@ -214,8 +279,13 @@ class Engine:
         if seconds <= 9:
             seconds = '0' + str(seconds)
         output = str(hours) + ":" + str(minutes) + ":" + str(seconds)
-
-        return output
+        """ 
+        date_handler = lambda obj: (
+            obj.isoformat()
+            if isinstance(obj, (datetime.datetime, datetime.date))
+            else None
+        )
+        return json.dumps(self.startTime, default=date_handler)
 
     def getRebootInfo(self):
         # Getting our reboot info
@@ -239,6 +309,23 @@ class Engine:
         data = self.resourcePool.getFullOutput()
         return data
 
+    def generateSystemHash(self):
+        return ""
+
+    def getMeetingData(self):
+        date_handler = lambda obj: (
+            obj.isoformat()
+            if isinstance(obj, (datetime.datetime, datetime.date))
+            else None
+        )
+
+        data = {}
+        data['isMeeting'] = self.meetingMode
+        data['meetingTime'] = json.dumps(self.meetingStartTime, default=date_handler)
+        data['meetingMS'] = self.totalMeetingAdjustTimeMS
+
+        return data
+
 class EngineRunner:
 
     def __init__(self, engine, processSpeed):
@@ -247,14 +334,21 @@ class EngineRunner:
 
     def run(self):
         while True:
+            # Skipping if in meeting mode
+            if self.engine.meetingMode:
+                time.sleep(self.processSpeed)
+                continue
+
             # Processing events
             self.processAllEvents()
 
             # Processing resources
-            #self.processResourceRequests()
+            self.processResourceRequests()
+
+            # Extra processing
+            self.processModulesExtra()
 
             # Running
-            print("Sleeping for " + str(self.processSpeed))
             time.sleep(self.processSpeed)
 
     def processResourceRequests(self):
@@ -266,7 +360,6 @@ class EngineRunner:
             module = self.engine.modulesTable[module_name]
             module.processResourceRemoveFromPool()
         
-
     def processAllEvents(self):
         # Attempting to process time-based events
         eq = self.engine.eventSystem
@@ -280,6 +373,11 @@ class EngineRunner:
         # Pruning triggered events
         eq.prune()
 
+    def processModulesExtra(self):
+        for module_name in self.engine.modulesTable:
+            module = self.engine.modulesTable[module_name]
+            module.processExtra()
+
 # Credentials application that does credential stuff
 class CredentialsApp(Module):
 
@@ -290,6 +388,9 @@ class CredentialsApp(Module):
         # Table of the username and password
         self.credTable = {}
         self.credTable['admin'] = 'admin'
+        
+        self.nametable = {}
+        self.nametable['admin'] = 'Administrator'
 
     def loadApp(self, app):
 
@@ -307,9 +408,14 @@ class CredentialsApp(Module):
 
             username = json_data['username']
             module = json_data['module']
+            
+            # Getting display account
+            display_username = "???UNKNOWN???"
+            if username in self.nametable:
+                display_username = self.nametable[username]
 
             if username not in self.credTable:
-                log = "Failed hack for username of " + str(username) + " on module " + str(module)
+                log = "Failed hack for username of " + str(display_username) + " on module " + str(module)
                 self.log.appendLog(log, 2)
 
                 # Also appending it to the modules logs, if the module exists
@@ -318,14 +424,14 @@ class CredentialsApp(Module):
                 return throw_json_error(400, "Invalid credential")
 
             else:
-                log = "Hack for username of " + str(username) + " on module " + str(module)
+                log = "Hack for username of " + str(display_username) + " on module " + str(module)
                 self.log.appendLog(log, 2)
 
                 # Also appending it to the modules logs, if the module exists
                 moduleObj = self.engine.modulesTable[module]
                 moduleObj.log.appendLog(log, 2)
 
-                return throw_json_success("Hack", username)
+                return throw_json_success("Hack", display_username)
 
             
 
@@ -338,20 +444,25 @@ class CredentialsApp(Module):
             password = json_data['password']
             module = json_data['module']
 
+            # Getting display account
+            display_username = "???UNKNOWN???"
+            if username in self.nametable:
+                display_username = self.nametable[username]
+
             # Validate default admin
             output = False
             if username in self.credTable and self.credTable[username] == password:
                 output = True
 
             if (output):
-                log = "Valid credentials for user " + str(username) + " on module " + str(module)
+                log = "Valid credentials for user " + str(display_username) + " on module " + str(module)
                 self.log.appendLog(log)
 
                 # Also appending it to the modules logs, if the module exists
                 moduleObj = self.engine.modulesTable[module]
                 moduleObj.log.appendLog(log)
             else:
-                log = "Invalid credentials for user " + str(username) + " on module " + str(module)
+                log = "Invalid credentials for user " + str(display_username) + " on module " + str(module)
                 self.log.appendLog(log, 1)
 
                 # Also appending it to the modules logs, if the module exists
@@ -361,7 +472,7 @@ class CredentialsApp(Module):
 
             data = {}
             data['valid'] = output
-            data['username'] = username
+            data['username'] = display_username
             response = throw_json_success("Validation status", data)
 
             return response
@@ -373,10 +484,16 @@ class CredentialsApp(Module):
 
             username = json_data['username']
             password = json_data['password']
+            fullname = json_data['name']
 
             self.credTable[username] = password
+            self.nametable[username] = fullname
 
-            return throw_json_success("Success", True)
+            output = {}
+            output['credentials'] = self.credTable
+            output['names'] = self.nametable
+
+            return throw_json_success("Success", output)
 
         @app.route('/cred/delete', methods=['POST'])
         def delete_cred():
@@ -385,6 +502,7 @@ class CredentialsApp(Module):
 
             username = json_data['username']
             self.credTable.pop(username, None)
+            self.credTable.pop(username)
 
             return throw_json_success("Success", True)
 
@@ -392,7 +510,11 @@ class CredentialsApp(Module):
         @app.route('/cred/get', methods=['GET'])
         def get_cred():
             # Getting all credentials
-            response = throw_json_success("Credentaisl", self.credTable)
+            output = {}
+            output['credentials'] = self.credTable
+            output['names'] = self.nametable
+
+            response = throw_json_success("Credentials", output)
 
             return response
 
