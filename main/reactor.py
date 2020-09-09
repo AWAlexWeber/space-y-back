@@ -6,7 +6,7 @@ from .shipresourcecontainer import *
 
 ### Main Reactor Varaibles ###
 REACTOR_INTERNAL_HEAT_MAX = 500
-REACTOR_INTERNAL_COOLANT_MAX = 5000
+REACTOR_INTERNAL_COOLANT_MAX = 500
 REACTOR_GLOBAL_POWER_MAX = 500000
 
 ### Sub module Variables ###
@@ -23,6 +23,7 @@ REACTOR_TRIT_USE_RATE = 2 # RATE
 REACTOR_DEUT_USE_RATE = 3 # RATE
 
 # Submodule heat #
+REACTOR_SUBMODULE_COOLANT_REFIL_RATE = 2 # RATE
 REACTOR_SUBMODULE_COOLANT_DRAW_AMOUNT = 1 # RATE
 REACTOR_SUBMODULE_COOLANT_DRAW_HEAT_AMOUNT = 0.75 # RATE
 REACTOR_SUBMODULE_HEAT_REMOVE_PASSIVE = 0.15 # RATE
@@ -171,6 +172,11 @@ class ReactorModule(Module):
 
             attemptPower = reactorSub.attempGeneratePower()
             self.globalResourceContainer.addResource("power", attemptPower)
+
+            # Attempting to add coolant to the individual reactor submodules
+            if reactorSub.isOnline():
+                drawCoolantForReactor = self.internalResourceContainer.removeResource('coolant', REACTOR_SUBMODULE_COOLANT_REFIL_RATE)
+                reactorSub.resourceContainer.addResource('coolant', drawCoolantForReactor)
 
             # Also, refilling the container if it has room
             if reactorSub.isRefill:
