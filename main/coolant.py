@@ -6,19 +6,19 @@ from .shipresourcecontainer import *
 
 ### SUB MODULES ###
 COOLANT_DEUT_USE_RATE = 3
-COOLANT_OXY_USE_RATE = 500
-COOLANT_POWER_USE_RATE = 250
+COOLANT_OXY_USE_RATE = 10
+COOLANT_POWER_USE_RATE = 100
 
 COOLANT_SUBMODULE_DEUTERIUM_MAX = 1000
 COOLANT_SUBMODULE_OXYGEN_MAX = 10000
 COOLANT_SUBMODULE_POWER_MAX = 5000
 
 COOLANT_SUBMODULE_DEUT_REFIL_AMOUNT = 10
-COOLANT_SUBMODULE_POWER_REFIL_RATE = 1000
+COOLANT_SUBMODULE_POWER_REFIL_RATE = 2000
 COOLANT_SUBMODULE_OXY_REFIL_RATE = 1000
 
 ### MAIN ###
-COOLANT_GENERATE_AMOUNT = 0.25
+COOLANT_GENERATE_AMOUNT = 1.5
 COOLANT_INTERNAL_OXY_MAX = 4000
 COOLANT_INTERNAL_POWER_MAX = 50000
 
@@ -129,10 +129,23 @@ class CoolantModule(Module):
             if not coolantModule == None:
                 coolantModule.attemptDestroy()
 
+        @app.route('/coolant/<path:id>/setSpin/<path:spinSpeed>/', methods=['GET'])
+        def set_spin_speed(id, spinSpeed):
+            output = False
+            name = 'coolant-' + str(id)
+            coolantModule = self.getSubModule(name)
+
+            if not coolantModule == None:
+                coolantModule.speed = int(spinSpeed)
+                output = True
+
+            response = throw_json_success("Set spin speed", output)
+            return response
+
         # Getting advanced status
     def getAdvancedStatus(self):
         output = super().getAdvancedStatus()
-        output["moduleCoolant"] = round(self.internalResourceContainer.getResourceLevel('oxygen') / self.internalResourceContainer.getResourceCap('oxygen') * 100)
+        output["moduleOxygen"] = round(self.internalResourceContainer.getResourceLevel('oxygen') / self.internalResourceContainer.getResourceCap('oxygen') * 100)
         output["modulePower"] = round(self.internalResourceContainer.getResourceLevel('power') / self.internalResourceContainer.getResourceCap('power') * 100)
         output["resource"] = self.internalResourceContainer.getFullOutput()
 
@@ -184,8 +197,8 @@ class CoolantModule(Module):
 
             # Attempting to draw coolant from the global coolant container into our internal one
             # Only draw how much we need to fill
-            drawPower = self.globalResourceContainer.removeResource('power', self.internalResourceContainer.getResourceCap('power') - self.internalResourceContainer.getResourceLevel('power'))
-            drawOxygen = self.globalResourceContainer.removeResource('oxygen', self.internalResourceContainer.getResourceCap('oxygen') - self.internalResourceContainer.getResourceLevel('oxygen'))
+            drawPower = self.globalResourceContainer.removeResource('power', self.internalResourceContainer.getResourceCap('power') - self.internalResourceContainer.getResourceLevel('power'), 'coolant')
+            drawOxygen = self.globalResourceContainer.removeResource('oxygen', self.internalResourceContainer.getResourceCap('oxygen') - self.internalResourceContainer.getResourceLevel('oxygen'), 'coolant')
             self.internalResourceContainer.addResource('power', drawPower)
             self.internalResourceContainer.addResource('oxygen', drawOxygen)
 
@@ -199,9 +212,9 @@ class CoolantSubModule(SubModule):
         self.coolantOutput = coolantOutput
         self.pulledRequiredResource = False
 
-        self.powerWarning = False
-        self.oxygenWarning = False
-        self.deuteriumWarning = False
+        self.powerWarning = True
+        self.oxygenWarning = True
+        self.deuteriumWarning = True
 
         self.deuteriumUse = COOLANT_DEUT_USE_RATE
         self.oxygenUse = COOLANT_OXY_USE_RATE
@@ -220,6 +233,7 @@ class CoolantSubModule(SubModule):
         data = super().getAdvancedStatus()
         data['resource'] = self.resourceContainer.getFullOutput()
         data['powerOutput'] = self.coolantOutput
+        data['spinSpeed'] = self.speed
         return data
 
     def enableRefill(self):
@@ -258,20 +272,29 @@ class CoolantSubModule(SubModule):
             if not self.oxygenWarning and resourceOxygen < self.resourceContainer.getResourceCap("oxygen") / 2:
                 self.logParent("50% Oxygen", 2)
                 self.oxygenWarning = True
+            elif self.oxygenWarning and resourceOxygen > self.resourceContainer.getResourceCap("oxygen") / 2:
+                self.oxygenWarning = False
+                self.logParent("More than 50% Oxygen", 0)
 
             if not self.powerWarning and resourcePower < self.resourceContainer.getResourceCap("power") / 2:
                 self.logParent("50% Power", 2)
                 self.powerWarning = True
+            elif self.powerWarning and resourcePower > self.resourceContainer.getResourceCap("power") / 2:
+                self.powerWarning = False
+                self.logParent("More than 50% Power", 0)
 
             if not self.isRefill and not self.deuteriumWarning and resourceDeuterium < self.resourceContainer.getResourceCap("deuterium") / 2:
                 self.logParent("50% Deuterium", 2)
                 self.deuteriumWarning = True
+            elif self.deuteriumWarning and resourceDeuterium > self.resourceContainer.getResourceCap("deuterium") / 2:
+                self.deuteriumWarning = False
+                self.logParent("More than 50% deuterium", 0)
 
 
         if self.pulledRequiredResource:
-            self.resourceContainer.removeResource("power", self.powerUse)
-            self.resourceContainer.removeResource("oxygen", self.oxygenUse)
-            self.resourceContainer.removeResource("deuterium", self.deuteriumUse)
+            self.resourceContainer.removeResource("power", self.powerUse * self.speed)
+            self.resourceContainer.removeResource("oxygen", self.oxygenUse * self.speed)
+            self.resourceContainer.removeResource("deuterium", self.deuteriumUse * self.speed)
 
     def attemptGenerateCoolant(self):
         if not self.isOnline():
@@ -283,7 +306,7 @@ class CoolantSubModule(SubModule):
             # We did!
 
             # Let's output power
-            return self.coolantOutput
+            return (self.coolantOutput * self.speed)
         
         # Finally, returning 0 if nothing else worked
         return 0

@@ -326,6 +326,14 @@ class Engine:
 
         return data
 
+    def validateOverride(self, command):
+        if command[0] == '9':
+            return 'Destroyed'
+        elif command[0] == 'A':
+            return 'Repaired'
+        else:
+            return 'False'
+
 class EngineRunner:
 
     def __init__(self, engine, processSpeed):

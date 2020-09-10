@@ -143,6 +143,9 @@ class ReactorModule(Module):
             if not reactorModule == None:
                 reactorModule.attemptDestroy()
 
+            response = throw_json_success("Blown up!", output)
+            return response
+
     # Getting advanced status
     def getAdvancedStatus(self):
         output = super().getAdvancedStatus()
@@ -196,7 +199,7 @@ class ReactorModule(Module):
 
             # Attempting to draw coolant from the global coolant container into our internal one
             # Only draw how much we need to fill
-            drawnCoolant = self.globalResourceContainer.removeResource('coolant', self.internalResourceContainer.getResourceCap('coolant') - self.internalResourceContainer.getResourceLevel('coolant'))
+            drawnCoolant = self.globalResourceContainer.removeResource('coolant', self.internalResourceContainer.getResourceCap('coolant') - self.internalResourceContainer.getResourceLevel('coolant'), 'reactor')
             self.internalResourceContainer.addResource('coolant', drawnCoolant)
 
         return None
