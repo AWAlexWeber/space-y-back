@@ -7,7 +7,7 @@ from .shipresourcecontainer import *
 ### SUB MODULES ###
 COOLANT_DEUT_USE_RATE = 3
 COOLANT_OXY_USE_RATE = 10
-COOLANT_POWER_USE_RATE = 100
+COOLANT_POWER_USE_RATE = 125
 
 COOLANT_SUBMODULE_DEUTERIUM_MAX = 1000
 COOLANT_SUBMODULE_OXYGEN_MAX = 10000
@@ -274,21 +274,21 @@ class CoolantSubModule(SubModule):
                 self.oxygenWarning = True
             elif self.oxygenWarning and resourceOxygen > self.resourceContainer.getResourceCap("oxygen") / 2:
                 self.oxygenWarning = False
-                self.logParent("More than 50% Oxygen", 0)
+                self.logParent("More than 50% Oxygen", -1)
 
             if not self.powerWarning and resourcePower < self.resourceContainer.getResourceCap("power") / 2:
                 self.logParent("50% Power", 2)
                 self.powerWarning = True
             elif self.powerWarning and resourcePower > self.resourceContainer.getResourceCap("power") / 2:
                 self.powerWarning = False
-                self.logParent("More than 50% Power", 0)
+                self.logParent("More than 50% Power", -1)
 
             if not self.isRefill and not self.deuteriumWarning and resourceDeuterium < self.resourceContainer.getResourceCap("deuterium") / 2:
                 self.logParent("50% Deuterium", 2)
                 self.deuteriumWarning = True
             elif self.deuteriumWarning and resourceDeuterium > self.resourceContainer.getResourceCap("deuterium") / 2:
                 self.deuteriumWarning = False
-                self.logParent("More than 50% deuterium", 0)
+                self.logParent("More than 50% deuterium", -1)
 
 
         if self.pulledRequiredResource:

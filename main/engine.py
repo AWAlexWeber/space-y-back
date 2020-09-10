@@ -51,6 +51,7 @@ class Engine:
 
         # Starting our event system
         self.eventSystem = EventSystem()
+        self.IS_GAME_ENABLED = False
 
         # Starting our resource pool
         resourcePool = ShipResourceContainer(self)
@@ -117,6 +118,24 @@ class Engine:
             self.meetingStartTime = None
 
             response = throw_json_success("Meeting adjourned", True)
+            return response
+
+        # Initializing our engine routes
+        @app.route('/engine/startGame', methods=['GET'])
+        def start_game():
+            # Getting our engine status
+            self.IS_GAME_ENABLED = True
+
+            response = throw_json_success("Started game!", True)
+            return response
+
+        # Initializing our engine routes
+        @app.route('/engine/stopGame', methods=['GET'])
+        def stop_game():
+            # Getting our engine status
+            self.IS_GAME_ENABLED = False
+
+            response = throw_json_success("Stopped game!", True)
             return response
 
         # Initializing our engine routes

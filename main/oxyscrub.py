@@ -9,7 +9,7 @@ from .shipresourcecontainer import *
 OXYSCRUB_GLOBAL_OXYGEN_MAX = 100000
 OXYSCRUB_LOCAL_POWER_MAX = 50000
 
-OXYSCRUB_POWER_USE_RATE = 50 # RATE
+OXYSCRUB_POWER_USE_RATE = 75 # RATE
 OXYSCRUB_MAX_RATE_GENERATE = 200 # RATE
 
 OXYSCRUB_SUBMODULE_POWER_MAX = 5000
@@ -137,7 +137,8 @@ class OxyScrubModule(Module):
         # This will take out resources FROM THE POOL
 
         # No matter what, people gotta breath
-        self.globalResourceContainer.removeResource('oxygen', BREATH_RATE)
+        if self.engine.IS_GAME_ENABLED:
+            self.globalResourceContainer.removeResource('oxygen', BREATH_RATE)
 
         for oxyscrubSub in self.oxygenSubModules:
             # Attempting to draw fuel
@@ -242,7 +243,8 @@ class OxyScrubSubModule(SubModule):
             filterEfficiency = 0
             for filter in self.filterList:
                 filterEfficiency += filter.filtrationLevel
-                filter.degradeFilter()
+                if self.engine.IS_GAME_ENABLED:
+                    filter.degradeFilter()
             filterEfficiency = filterEfficiency / 2
 
             # Let's output power

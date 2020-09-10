@@ -6,14 +6,14 @@ from .shipresourcecontainer import *
 
 ### Main Reactor Varaibles ###
 REACTOR_INTERNAL_HEAT_MAX = 500
-REACTOR_INTERNAL_COOLANT_MAX = 500
+REACTOR_INTERNAL_COOLANT_MAX = 50
 REACTOR_GLOBAL_POWER_MAX = 500000
 
 ### Sub module Variables ###
-REACTOR_SUBMODULE_GENERATE = 500   # RATE
+REACTOR_SUBMODULE_GENERATE = 750   # RATE
 REACTOR_SUBMODULE_TRITIUM_MAX = 1000
 REACTOR_SUBMODULE_DEUTERIUM_MAX = 1000
-REACTOR_SUBMODULE_COOLANT_MAX = 100
+REACTOR_SUBMODULE_COOLANT_MAX = 10
 REACTOR_SUBMODULE_HEAT_MAX = 500
 
 REACTOR_SUBMODULE_TRIT_REFIL_AMOUNT = 10.0   # RATE
@@ -270,6 +270,7 @@ class ReactorSubModule(SubModule):
         resourceTritium, resourceDeuterium = self.resourceContainer.getResourceLevel("tritium"), self.resourceContainer.getResourceLevel("deuterium")
         if resourceTritium == self.resourceContainer.getResourceCap("tritium") and resourceDeuterium == self.resourceContainer.getResourceCap("deuterium"):
             self.isRefill = False
+            self.logParent("Refill Complete!", -1)
 
     # Function to draw fuel from our internal resource container
     # If it fails, set to false
